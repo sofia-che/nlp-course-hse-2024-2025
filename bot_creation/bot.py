@@ -20,6 +20,7 @@ dp = Dispatcher()
 with open('C:/Users/User/Downloads/faq (1).json', 'r', encoding='utf-8') as f:
     data = json.load(f)
 
+# создаем список кнопок
 kb = [
     [
         KeyboardButton(text="О компании"), 
@@ -27,9 +28,11 @@ kb = [
     ]
 ]
 
+# преобразуем вопросы и ответы из файла faq.json в списки
 faq_questions = [item['question'] for item in data['faq']]
 faq_answers = [item['answer'] for item in data['faq']]
 
+# инициализируем необходимые переменные и реализуем метод векторного поиска в функции sentence_vector
 vectorizer = TfidfVectorizer()
 tfidf_matrix = vectorizer.fit_transform(faq_questions)
 
@@ -41,16 +44,19 @@ def sentence_vector(sentence, model):
     vectors = [model.wv[word] for word in words if word in model.wv]
     return np.mean(vectors, axis=0) if vectors else np.zeros(model.vector_size)
 
+# запускаем интерфейс с кнопками
 keyboard = ReplyKeyboardMarkup(
     keyboard=kb,  
     resize_keyboard=True,
     input_field_placeholder="Выберите действие"
 )
 
+# обрабатываем команду start
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
     await message.answer("С чем вам помочь?", reply_markup=keyboard)
 
+# обрабатываем текст кнопок
 @dp.message(F.text == "О компании")
 async def about_company(message: types.Message):
     await message.answer("Наша компания занимается доставкой товаров по всей стране.")
@@ -59,10 +65,10 @@ async def about_company(message: types.Message):
 async def report_issue(message: types.Message):
     await message.reply("Пожалуйста, прикрепите фотографию для жалобы.")
 
-# Обработчик фотографий
+# обрабатываем фотографию, присланную пользователем
 @dp.message(F.photo)
 async def handle_photo(message: types.Message):
-    photo = message.photo[-1]
+    photo = message.photo[-1] 
     file_info = await bot.get_file(photo.file_id)
     file_size = photo.file_size
     file_name = file_info.file_path.split('/')[-1]
@@ -71,16 +77,20 @@ async def handle_photo(message: types.Message):
 
     await message.reply(f"Название файла: {file_name}\nРазмер файла: {file_size} байт\nВаш запрос передан специалисту.")
 
+# обрабатываем вопросы пользователя и ищем наиболее подходящие ответы с помощью методов TF-IDF и Word2Vec
 @dp.message()
 async def handle_message(message: types.Message):
     query = message.text
 
-    if query:
+    if query: # убеждаемся, что query не None
+
+        # применяем метод TF-IDF
         query_vec = vectorizer.transform([query])
         similarities = cosine_similarity(query_vec, tfidf_matrix)
         best_match_idx_tfidf = similarities.argmax()
         best_answer_tfidf = faq_answers[best_match_idx_tfidf]
-
+        
+        # применяем метод Word2Vec
         query_vector = sentence_vector(query, model).reshape(1, -1)
         faq_vectors = np.array([sentence_vector(q, model) for q in faq_questions])
         similarities_w2v = cosine_similarity(query_vector, faq_vectors)
